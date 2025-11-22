@@ -52,7 +52,7 @@ async function processQuery (user: User, req: Request, res: Response, next: Next
     res.status(503).send()
     return
   }
-  const username = user.username
+  let username = user.username
   if (!username) {
     res.status(200).json({
       action: 'namequery',
@@ -60,6 +60,9 @@ async function processQuery (user: User, req: Request, res: Response, next: Next
     })
     return
   }
+
+  // Sanitize username to prevent injection attacks
+  username = String(username).replace(/['"\\]/g, '')
 
   if (!bot.factory.run(`currentUser('${user.id}')`)) {
     try {
