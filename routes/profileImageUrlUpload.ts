@@ -18,6 +18,31 @@ export function profileImageUrlUpload () {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
       if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+
+      // Validate URL to prevent SSRF
+      try {
+        const parsedUrl = new URL(url)
+        const allowedProtocols = ['http:', 'https:']
+        const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '169.254.169.254']
+
+        if (!allowedProtocols.includes(parsedUrl.protocol)) {
+          throw new Error('Invalid protocol')
+        }
+
+        if (blockedHosts.some(host => parsedUrl.hostname === host || parsedUrl.hostname.endsWith('.' + host))) {
+          throw new Error('Access to internal resources is not allowed')
+        }
+
+        // Block private IP ranges
+        const hostname = parsedUrl.hostname
+        if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(hostname)) {
+          throw new Error('Access to private IP ranges is not allowed')
+        }
+      } catch (error) {
+        next(error)
+        return
+      }
+
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
