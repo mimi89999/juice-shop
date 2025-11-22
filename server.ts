@@ -409,6 +409,10 @@ restoreOverwrittenFilesWithOriginals().then(() => {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
     }
+    // Prevent privilege escalation by removing role from registration
+    if (req.body.role && req.body.role !== security.roles.customer) {
+      delete req.body.role
+    }
     next()
   })
   app.post('/api/Users', verify.registerAdminChallenge())
