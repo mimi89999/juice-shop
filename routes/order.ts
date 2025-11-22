@@ -33,10 +33,17 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
+    const customer = security.authenticatedUsers.from(req)
+
+    // Verify user owns this basket
+    if (!customer || !customer.bid || parseInt(id, 10) !== customer.bid) {
+      res.status(403).json({ error: 'Access denied' })
+      return
+    }
+
     BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
-          const customer = security.authenticatedUsers.from(req)
           const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
@@ -135,18 +142,19 @@ export function placeOrder () {
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
-          if (req.body.UserId) {
+          const userId = customer?.data?.id
+          if (userId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
-              const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
+              const wallet = await WalletModel.findOne({ where: { UserId: userId } })
               if ((wallet != null) && wallet.balance >= totalPrice) {
-                WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } }).catch((error: unknown) => {
+                WalletModel.decrement({ balance: totalPrice }, { where: { UserId: userId } }).catch((error: unknown) => {
                   next(error)
                 })
               } else {
                 next(new Error('Insufficient wallet balance.'))
               }
             }
-            WalletModel.increment({ balance: totalPoints }, { where: { UserId: req.body.UserId } }).catch((error: unknown) => {
+            WalletModel.increment({ balance: totalPoints }, { where: { UserId: userId } }).catch((error: unknown) => {
               next(error)
             })
           }
